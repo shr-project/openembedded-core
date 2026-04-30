@@ -68,6 +68,22 @@ def wks_checksums(files, search_path):
             ret = ret + " " + found + ":True"
     return ret
 
+def wic_plugin_checksums(bblayers, bbpath):
+    entries = []
+    seen = set()
+    paths = (bblayers or "").split() + [p for p in (bbpath or "").split(":") if p]
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        plugin_dir = os.path.join(path, "lib", "wic", "plugins")
+        if os.path.isdir(plugin_dir):
+            for root, dirs, files in os.walk(plugin_dir):
+                dirs.sort()
+                for f in sorted(files):
+                    if f.endswith(".py"):
+                        entries.append(os.path.join(root, f) + ":True")
+    return " ".join(entries)
 
 WIC_CREATE_EXTRA_ARGS ?= ""
 
@@ -228,7 +244,12 @@ python do_rootfs_wicenv () {
 addtask do_flush_pseudodb after do_rootfs before do_image do_image_qa
 addtask do_rootfs_wicenv after do_image before do_image_wic do_image_wicenv
 do_rootfs_wicenv[vardeps] += "${WICVARS}"
+do_rootfs_wicenv[vardepsexclude] += "BBLAYERS BBPATH"
 do_rootfs_wicenv[prefuncs] = 'set_image_size'
+
+# Track actual plugin files instead of host paths (BBLAYERS/BBPATH excluded above).
+WIC_PLUGIN_CHECKSUMS = "${@wic_plugin_checksums(d.getVar('BBLAYERS'), d.getVar('BBPATH')) if d.getVar('USING_WIC') else ''}"
+do_rootfs_wicenv[file-checksums] += "${WIC_PLUGIN_CHECKSUMS}"
 
 IMAGE_CMD:wicenv () {
 	cp "${STAGING_DIR}/${MACHINE}/imgdata/${IMAGE_BASENAME}.env" \
