@@ -17,14 +17,13 @@ import filecmp
 
 from glob import glob
 from shutil import rmtree, copy
-from tempfile import NamedTemporaryFile
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory, mkdtemp
 from textwrap import dedent
 
 from oeqa.selftest.case import OESelftestTestCase
 from oeqa.core.decorator import OETestTag
 from oeqa.core.decorator.data import skipIfNotArch
-from oeqa.utils.commands import runCmd, bitbake, get_bb_var, get_bb_vars, runqemu
+from oeqa.utils.commands import runCmd, bitbake, get_bb_var, get_bb_vars, runqemu, create_temp_layer
 
 
 def extract_files(debugfs_output):
@@ -2300,3 +2299,109 @@ class ModifyTests(WicTestCase):
         # check if it's removed
         result = runCmd("wic ls %s:2/ -n %s" % (images[0], sysroot))
         self.assertNotIn('etc', [line.split()[-1] for line in result.output.split('\n') if line])
+
+
+class WicEnvHashTests(OESelftestTestCase):
+    """Tests for do_rootfs_wicenv task hash safety (bug 15662)."""
+
+    def setUpLocal(self):
+        super(WicEnvHashTests, self).setUpLocal()
+        self.topdir = get_bb_var('TOPDIR')
+
+    def _fresh_tmpdir(self, name):
+        """Return a clean TMPDIR path under TOPDIR, removing any prior contents."""
+        import shutil
+        path = os.path.join(self.topdir, name)
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        self.track_for_cleanup(path)
+        return path
+
+    def _get_task_sigdata_hash(self, tmpdir, taskname):
+        """Return the sigdata hash for taskname; fail if no match found."""
+        matches = []
+        for root, _, files in os.walk(os.path.join(tmpdir, 'stamps')):
+            for f in files:
+                if taskname in f and '.sigdata.' in f:
+                    matches.append(f.rsplit('.sigdata.', 1)[-1])
+        self.assertGreater(len(matches), 0,
+                           "No %s sigdata file found in %s" % (taskname, tmpdir))
+        return matches[0]
+
+    def test_bblayers_excluded_from_task_hash(self):
+        """BBLAYERS must appear in do_rootfs_wicenv[vardepsexclude]."""
+        import bb.tinfoil
+        with bb.tinfoil.Tinfoil() as tinfoil:
+            tinfoil.prepare(config_only=False, quiet=2)
+            d = tinfoil.parse_recipe('core-image-minimal')
+            vardepsexclude = (d.getVarFlag('do_rootfs_wicenv', 'vardepsexclude') or '').split()
+
+        self.assertIn('BBLAYERS', vardepsexclude,
+                      "BBLAYERS is not in do_rootfs_wicenv[vardepsexclude]; "
+                      "host paths will change the task hash across workspaces")
+
+    def test_hash_does_not_change_when_empty_layer_added_to_bblayers(self):
+        """Adding an empty layer to BBLAYERS must not change the do_rootfs_wicenv hash."""
+        tmpdir1 = self._fresh_tmpdir('tmp-wicenv-hash1')
+        self.write_config(
+            'TMPDIR = "%s"\n'
+            'BB_SIGNATURE_HANDLER = "OEBasicHash"\n'
+            'IMAGE_FSTYPES += "wic"\n' % tmpdir1
+        )
+        bitbake('core-image-minimal -c do_rootfs_wicenv -S none')
+        hash_before = self._get_task_sigdata_hash(tmpdir1, 'do_rootfs_wicenv')
+
+        # Add a layer with no wic plugins — changes BBLAYERS but must not change the hash.
+        templayerdir = mkdtemp(prefix='selftest-wicenv-')
+        self.track_for_cleanup(templayerdir)
+        create_temp_layer(templayerdir, 'selftestwicenvhash')
+        runCmd('bitbake-layers add-layer %s' % templayerdir)
+        self.add_command_to_tearDown('bitbake-layers remove-layer %s' % templayerdir)
+
+        tmpdir2 = self._fresh_tmpdir('tmp-wicenv-hash2')
+        self.write_config(
+            'TMPDIR = "%s"\n'
+            'BB_SIGNATURE_HANDLER = "OEBasicHash"\n'
+            'IMAGE_FSTYPES += "wic"\n' % tmpdir2
+        )
+        bitbake('core-image-minimal -c do_rootfs_wicenv -S none')
+        hash_after = self._get_task_sigdata_hash(tmpdir2, 'do_rootfs_wicenv')
+
+        self.assertEqual(hash_before, hash_after,
+                         "do_rootfs_wicenv hash changed after adding an empty layer to "
+                         "BBLAYERS even though no wic plugins changed (bug 15662)")
+
+    def test_hash_changes_when_wic_plugin_added_to_layer(self):
+        """Adding a layer that contains a wic plugin must change the do_rootfs_wicenv hash."""
+        tmpdir3 = self._fresh_tmpdir('tmp-wicenv-hash3')
+        self.write_config(
+            'TMPDIR = "%s"\n'
+            'BB_SIGNATURE_HANDLER = "OEBasicHash"\n'
+            'IMAGE_FSTYPES += "wic"\n' % tmpdir3
+        )
+        bitbake('core-image-minimal -c do_rootfs_wicenv -S none')
+        hash_before = self._get_task_sigdata_hash(tmpdir3, 'do_rootfs_wicenv')
+
+        # Add a layer that contains a wic plugin — must change the hash.
+        templayerdir = mkdtemp(prefix='selftest-wicenv-plugin-')
+        self.track_for_cleanup(templayerdir)
+        create_temp_layer(templayerdir, 'selftestwicenvplugin')
+        plugin_dir = os.path.join(templayerdir, 'lib', 'wic', 'plugins', 'source')
+        os.makedirs(plugin_dir)
+        with open(os.path.join(plugin_dir, 'selftest_dummy.py'), 'w') as f:
+            f.write('# selftest dummy wic source plugin\n')
+        runCmd('bitbake-layers add-layer %s' % templayerdir)
+        self.add_command_to_tearDown('bitbake-layers remove-layer %s' % templayerdir)
+
+        tmpdir4 = self._fresh_tmpdir('tmp-wicenv-hash4')
+        self.write_config(
+            'TMPDIR = "%s"\n'
+            'BB_SIGNATURE_HANDLER = "OEBasicHash"\n'
+            'IMAGE_FSTYPES += "wic"\n' % tmpdir4
+        )
+        bitbake('core-image-minimal -c do_rootfs_wicenv -S none')
+        hash_after = self._get_task_sigdata_hash(tmpdir4, 'do_rootfs_wicenv')
+
+        self.assertNotEqual(hash_before, hash_after,
+                            "do_rootfs_wicenv hash did not change after adding a layer "
+                            "with a wic plugin — file-checksums tracking is not working")
