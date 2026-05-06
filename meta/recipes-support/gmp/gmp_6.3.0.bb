@@ -16,6 +16,7 @@ SRC_URI = "https://gmplib.org/download/${BPN}/${BP}${REVISION}.tar.bz2 \
            file://0001-confiure.ac-Believe-the-cflags-from-environment.patch \
            file://0001-Complete-function-prototype-in-acinclude.m4-for-C23-.patch \
            file://0001-acinclude.m4-Add-parameter-names-in-prototype-for-g.patch \
+           file://run-ptest \
            "
 SRC_URI[sha256sum] = "ac28211a7cfb609bae2e2c8d6058d66c8fe96434f740cf6fe2e47b000d1c20cb"
 
@@ -51,3 +52,19 @@ SSTATE_SCAN_FILES += "gmp.h"
 MIPS_INSTRUCTION_SET = "mips"
 
 BBCLASSEXTEND = "native nativesdk"
+
+do_compile_ptest() {
+    oe_runmake -C ${B}/tests check TESTS=
+}
+
+do_install_ptest() {
+    install -d ${D}${PTEST_PATH}/tests
+
+    for d in . mpz mpn mpf mpq rand misc cxx; do
+        install -d ${D}${PTEST_PATH}/tests/$d
+        find ${B}/tests/$d -maxdepth 1 -type f -executable \
+            ! -name "*.la" | while read -r t; do
+            ${B}/libtool --mode=install install -m 0755 "$t" ${D}${PTEST_PATH}/tests/$d/
+        done
+    done
+}

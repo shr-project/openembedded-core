@@ -1,0 +1,19 @@
+#!/bin/sh
+
+cd "$(dirname "$0")/tests" || exit 1
+
+for d in . mpz mpn mpf mpq rand misc cxx; do
+    [ -d "$d" ] || continue
+    for test in $(find "$d" -maxdepth 1 -type f -executable | sort); do
+        testname=$(echo "$test" | sed 's|^\./||')
+        ./"$test"
+        ret=$?
+        if [ $ret -eq 0 ]; then
+            echo "PASS: $testname"
+        elif [ $ret -eq 77 ]; then
+            echo "SKIP: $testname"
+        else
+            echo "FAIL: $testname"
+        fi
+    done
+done

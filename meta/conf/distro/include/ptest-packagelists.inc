@@ -24,6 +24,7 @@ PTESTS_FAST = "\
     gdbm \
     gdk-pixbuf \
     glib-networking \
+    gmp \
     gzip \
     icu \
     json-c \
