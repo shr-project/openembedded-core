@@ -22,7 +22,7 @@ inherit autotools multilib_header ptest
 
 CPPFLAGS:append:riscv64  = " -pthread -D_REENTRANT"
 
-RDEPENDS:${PN}-ptest += "bash"
+RDEPENDS:${PN}-ptest += "bash coreutils"
 
 do_install:append() {
     oe_multilib_header urcu/config.h
@@ -30,6 +30,7 @@ do_install:append() {
 
 do_compile_ptest() {
     oe_runmake -C ${B}/tests/unit check TESTS=
+    oe_runmake -C ${B}/tests/regression check TESTS=
 }
 
 do_install_ptest() {
@@ -44,6 +45,15 @@ do_install_ptest() {
     install -m 0755 ${S}/tests/unit/test_get_cpu_mask_from_sysfs_cxx ${D}${PTEST_PATH}/tests/unit/
     install -m 0755 ${S}/tests/unit/test_get_max_cpuid_from_sysfs ${D}${PTEST_PATH}/tests/unit/
     install -m 0755 ${S}/tests/unit/test_get_max_cpuid_from_sysfs_cxx ${D}${PTEST_PATH}/tests/unit/
+
+    install -d ${D}${PTEST_PATH}/tests/regression
+
+    find ${B}/tests/regression -maxdepth 1 -type f -executable \
+        ! -name "*.la" | while read -r t; do
+        ${B}/libtool --mode=install install -m 0755 "$t" ${D}${PTEST_PATH}/tests/regression/
+    done
+
+    install -m 0755 ${S}/tests/regression/*.tap ${D}${PTEST_PATH}/tests/regression/
 
     install -d ${D}${PTEST_PATH}/tests/utils
     install -m 0644 ${S}/tests/utils/tap.sh ${D}${PTEST_PATH}/tests/utils/

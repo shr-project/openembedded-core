@@ -51,7 +51,6 @@ PTESTS_FAST = "\
     libtest-warnings-perl \
     libtimedate-perl \
     libtry-tiny-perl \
-    liburcu \
     libusb1 \
     libxml-namespacesupport-perl \
     libxml-parser-perl \
@@ -134,6 +133,7 @@ PTESTS_SLOW = "\
     libmodule-build-perl \
     libpng \
     ${@bb.utils.contains('DISTRO_FEATURES', 'seccomp', 'libseccomp', '',d)} \
+    liburcu \
     lttng-tools \
     lz4 \
     openssh \
