@@ -19,6 +19,9 @@ SRCREV = "b3d8fc43e9cb531d958c17ef2cd93b374bc14e8a"
 SRCBRANCH = "v259-stable"
 SRC_URI = "git://github.com/systemd/systemd.git;protocol=https;branch=${SRCBRANCH};tag=v${PV}"
 
+inherit upstream-stable-release-point
+STABLE_VERSION_PARTS = "1"
+
 CVE_PRODUCT = "systemd"
 
 CVE_STATUS[CVE-2019-3815] = "not-applicable-platform: only applied to RHEL"
