@@ -27,6 +27,9 @@ SRC_URI = "https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-${PV}.ta
            "
 SRC_URI[sha256sum] = "56682a36bb92dcf4b4f016fd8ec8e74059b79a8de25c15d670d731e7d18e45f4"
 
+STABLE_VERSION = "${@d.getVar('PV').split('p')[0].replace('.', r'\.')}"
+UPSTREAM_STABLE_RELEASE_REGEX = "^${STABLE_VERSION}p\d+$"
+
 CVE_STATUS[CVE-2007-2768] = "not-applicable-config: This CVE is specific to OpenSSH with the pam opie which we don't build/use here."
 
 # This CVE is specific to OpenSSH server, as used in Fedora and Red Hat Enterprise Linux 7
