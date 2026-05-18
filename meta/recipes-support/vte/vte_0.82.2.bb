@@ -15,7 +15,7 @@ DEPENDS = "fastfloat fmt glib-2.0 glib-2.0-native gtk+3 libpcre2 libxml2-native 
 
 GIR_MESON_OPTION = 'gir'
 GIDOCGEN_MESON_OPTION = "docs"
-inherit gnomebase gi-docgen features_check upstream-version-is-even gobject-introspection systemd vala
+inherit gnomebase gi-docgen features_check upstream-version-is-even gobject-introspection systemd vala upstream-stable-release-point
 
 SRC_URI += "file://0001-Add-W_EXITCODE-macro-for-non-glibc-systems.patch \
             file://0001-support-reproducibility-for-debug-sources.patch;patchdir=./subprojects/simdutf \
