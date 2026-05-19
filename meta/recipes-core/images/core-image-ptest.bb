@@ -45,6 +45,7 @@ QB_MEM:virtclass-mcextend-python3-numpy = "-m 4096"
 QB_MEM:virtclass-mcextend-tcl = "-m 5100"
 QB_MEM:virtclass-mcextend-go = "-m 4096"
 QB_MEM:virtclass-mcextend-gnutls = "-m 1536"
+QB_MEM:virtclass-mcextend-zstd = "-m 4096"
 
 TEST_SUITES = "ping ssh parselogs ptest"
 
