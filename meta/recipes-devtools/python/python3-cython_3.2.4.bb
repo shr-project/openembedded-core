@@ -13,6 +13,7 @@ inherit pypi setuptools3 cython
 
 SRC_URI += " \
     file://0001-Replace-not-predictable-build-path-prefix-with-hardc.patch \
+    file://0001-Use-fixed-relative-dstdir-instead-of-the-unpredictab.patch \
 "
 
 # No need to depend on self

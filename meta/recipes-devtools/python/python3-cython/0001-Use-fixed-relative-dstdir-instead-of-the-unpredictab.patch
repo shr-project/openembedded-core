@@ -1,0 +1,93 @@
+From 1a97d877e9fa9856c55db73bb5fbdcd3e86cada1 Mon Sep 17 00:00:00 2001
+From: Zhixiong Chi <zhixiong.chi@windriver.com>
+Date: Thu, 23 Apr 2026 00:19:59 -0700
+Subject: [PATCH] Use fixed relative dstdir instead of the unpredictable tmpdir
+ for sharedmodule
+
+When the option "--generated-shared" is used to generated __cyutility as the
+link https://github.com/scikit-learn/scikit-learn/pull/31151/files, the path
+for filename_table in the generated pyx/c file contains tmp dir which is not
+predictable though it has been updated to the relative path, and it caused
+the generated output file is not stable at each build and made the generated
+library is not reproducible [1] between builds.
+
+example as python3_pandas:
+
+vim build/_cyutility.c
+......
+/* #### Code section: filename_table ### */
+
+static const char* const __pyx_f[] = {
+  "../../../../../../../../../../../../tmp/tmpXXXXXX/_cyutility.pyx",
+  "<stringsource>",
+};
+
+Replace with the fixed path based dest directory provided by the option
+"--generated-shard", and don't use the tmpdir anymore.
+
+After applied this commit, vim build/_cyutility.c
+......
+/* #### Code section: filename_table ### */
+
+static const char* const __pyx_f[] = {
+  "shared_buildpath/_cyutility.pyx",
+  "<stringsource>",
+};
+
+[1] https://reproducible-builds.org/
+
+Upstream-Status: Submitted [https://github.com/cython/cython/pull/7634]
+
+Signed-off-by: Zhixiong Chi <zhixiong.chi@windriver.com>
+---
+ Cython/Build/SharedModule.py | 30 +++++++++++++++++-------------
+ 1 file changed, 17 insertions(+), 13 deletions(-)
+
+diff --git a/Cython/Build/SharedModule.py b/Cython/Build/SharedModule.py
+index b466e57ed..171f8180f 100644
+--- a/Cython/Build/SharedModule.py
++++ b/Cython/Build/SharedModule.py
+@@ -72,23 +72,27 @@ def generate_shared_module(options):
+     Errors.open_listing_file(None)
+ 
+     dest_c_file = options.shared_c_file_path
++    dest_c_dir = os.path.dirname(dest_c_file)
++    dest_tmp_buildpath = os.path.join(dest_c_dir, "shared_buildpath")
+     module_name = os.path.splitext(os.path.basename(dest_c_file))[0]
+ 
+     context = Main.Context.from_options(options)
+     scope = Symtab.ModuleScope('MemoryView', parent_module = None, context = context, is_package=False)
+ 
+-    with tempfile.TemporaryDirectory() as tmpdirname:
+-        pyx_file = os.path.join(tmpdirname, f'{module_name}.pyx')
+-        c_file = os.path.join(tmpdirname, f'{module_name}.c')
+-        with open(pyx_file, 'w'):
+-            pass
+-        source_desc = FileSourceDescriptor(pyx_file)
+-        comp_src = Main.CompilationSource(source_desc, EncodedString(module_name), os.getcwd())
+-        result = Main.create_default_resultobj(comp_src, options)
+-
+-        pipeline = create_shared_library_pipeline(context, scope, options, result)
+-        err, enddata = Pipeline.run_pipeline(pipeline, comp_src)
+-        if err is None:
+-            shutil.copy(c_file, dest_c_file)
++    os.makedirs(dest_tmp_buildpath, exist_ok=True)
++    pyx_file = os.path.join(dest_tmp_buildpath, f'{module_name}.pyx')
++    c_file = os.path.join(dest_tmp_buildpath, f'{module_name}.c')
++    with open(pyx_file, 'w'):
++        pass
++    source_desc = FileSourceDescriptor(pyx_file)
++    comp_src = Main.CompilationSource(source_desc, EncodedString(module_name), os.getcwd())
++    result = Main.create_default_resultobj(comp_src, options)
++
++    pipeline = create_shared_library_pipeline(context, scope, options, result)
++    err, enddata = Pipeline.run_pipeline(pipeline, comp_src)
++    if err is None:
++        shutil.copy(c_file, dest_c_file)
++
++    shutil.rmtree(dest_tmp_buildpath)
+ 
+     return err, enddata
+-- 
+2.49.0
+
