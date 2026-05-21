@@ -1,0 +1,59 @@
+From c13732ec5721b790b5c6004a474cd3d63fcf3f59 Mon Sep 17 00:00:00 2001
+From: "mark.yang" <mark.yang@lge.com>
+Date: Tue, 19 May 2026 16:29:00 +0900
+Subject: Skip llvm-config DEPENDS in standalone clang PGO bootstrap
+
+LLVM's add_llvm_tool installs tool binaries without EXPORT, so
+llvm-config never lands in LLVMExports.cmake. The target only exists
+in monorepo builds where LLVM is built alongside. In a standalone
+clang build against a sysroot-installed LLVM, ExternalProject_Add's
+DEPENDS llvm-config fails with "unknown target".
+
+The compiler-rt ExternalProject is gated by both
+LLVM_BUILD_EXTERNAL_COMPILER_RT=ON (set by oe-core's clang_git.bb)
+and EXISTS ${COMPILER_RT_SRC_ROOT}/. Regular OE builds skip the path
+silently because COMPILER_RT_SRC_ROOT isn't pointed anywhere real.
+Standalone PGO bootstrap pins LLVM_EXTERNAL_COMPILER_RT_SOURCE_DIR
+at a compiler-rt tree to build the profiling runtime in-tree, which
+trips both gates and reaches the broken DEPENDS.
+
+Skip the DEPENDS when llvm-config isn't a target, and point
+LLVM_CONFIG_PATH at LLVM_TOOLS_BINARY_DIR/llvm-config.
+
+Upstream-Status: Inappropriate [OE specific]
+Signed-off-by: mark.yang <mark.yang@lge.com>
+---
+ clang/runtime/CMakeLists.txt | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/clang/runtime/CMakeLists.txt b/clang/runtime/CMakeLists.txt
+index 7b6ba3194..62381ce64 100644
+--- a/clang/runtime/CMakeLists.txt
++++ b/clang/runtime/CMakeLists.txt
+@@ -73,8 +73,16 @@ if(LLVM_BUILD_EXTERNAL_COMPILER_RT AND EXISTS ${COMPILER_RT_SRC_ROOT}/)
+     get_clang_resource_dir(output_resource_dir PREFIX ${LLVM_BINARY_DIR})
+   endif()
+   get_clang_resource_dir(install_resource_dir)
++
++  set(_compiler_rt_ep_deps clang)
++  if(TARGET llvm-config)
++    list(APPEND _compiler_rt_ep_deps llvm-config)
++    set(_compiler_rt_llvm_config_path ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-config)
++  else()
++    set(_compiler_rt_llvm_config_path ${LLVM_TOOLS_BINARY_DIR}/llvm-config)
++  endif()
+   ExternalProject_Add(compiler-rt
+-    DEPENDS llvm-config clang ${compiler_rt_configure_deps}
++    DEPENDS ${_compiler_rt_ep_deps} ${compiler_rt_configure_deps}
+     PREFIX ${COMPILER_RT_PREFIX}
+     SOURCE_DIR ${COMPILER_RT_SRC_ROOT}
+     STAMP_DIR ${STAMP_DIR}
+@@ -87,7 +95,7 @@ if(LLVM_BUILD_EXTERNAL_COMPILER_RT AND EXISTS ${COMPILER_RT_SRC_ROOT}/)
+                -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
+                -DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}
+                -DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}
+-               -DLLVM_CONFIG_PATH=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-config
++               -DLLVM_CONFIG_PATH=${_compiler_rt_llvm_config_path}
+                -DLLVM_LIT_ARGS=${LLVM_LIT_ARGS}
+                -DCOMPILER_RT_OUTPUT_DIR=${output_resource_dir}
+                -DCOMPILER_RT_EXEC_OUTPUT_DIR=${LLVM_RUNTIME_OUTPUT_INTDIR}

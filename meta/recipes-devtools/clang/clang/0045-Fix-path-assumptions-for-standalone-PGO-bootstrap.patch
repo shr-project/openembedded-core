@@ -1,0 +1,80 @@
+From bebb6024b146958bba6330042b1b380f69ef0c54 Mon Sep 17 00:00:00 2001
+From: "mark.yang" <mark.yang@lge.com>
+Date: Mon, 11 May 2026 14:38:36 +0900
+Subject: Fix path assumptions for standalone PGO bootstrap
+
+When clang-native is configured as a standalone clang build (rather
+than a monorepo) and LLVM is provided by a separate recipe
+(llvm-native) installed into the sysroot, LLVM_BINARY_DIR and
+LLVM_RUNTIME_OUTPUT_INTDIR resolve to llvm-native's install prefix
+(recipe-sysroot-native/usr). clang/runtime/CMakeLists.txt anchors
+output_resource_dir there, so libclang_rt.profile.a lands in the
+install tree and the clang in clang-native's build tree cannot find
+it in its own build tree.
+
+clang/CMakeLists.txt passes -DLLVM_PROFDATA=LLVM_RUNTIME_OUTPUT_INTDIR/
+llvm-profdata to the stage2 cmake.
+Those paths point at clang-native's build tree bin/ where the tools
+never exist.
+They are installed into the sysroot by llvm-native.
+stage2 generate-profdata then fails with FileNotFoundError when
+perf-helper.py merges the profile.
+
+Under CLANG_BUILT_STANDALONE, anchor output_resource_dir at
+CMAKE_BINARY_DIR and take llvm-profdata/llvm-profgen from
+LLVM_TOOLS_BINARY_DIR. Drop the add_dependencies on those tools in
+the standalone case since they are not build targets.
+
+Upstream-Status: Inappropriate [OE specific - standalone clang build]
+Signed-off-by: mark.yang <mark.yang@lge.com>
+---
+ clang/CMakeLists.txt         | 16 ++++++++++++----
+ clang/runtime/CMakeLists.txt |  6 +++++-
+ 2 files changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/clang/CMakeLists.txt b/clang/CMakeLists.txt
+index 2820e2b54..bd5527f42 100644
+--- a/clang/CMakeLists.txt
++++ b/clang/CMakeLists.txt
+@@ -755,12 +755,20 @@ if (CLANG_ENABLE_BOOTSTRAP)
+   endif()
+ 
+   if(BOOTSTRAP_LLVM_BUILD_INSTRUMENTED)
+-    add_dependencies(clang-bootstrap-deps llvm-profdata)
+-    set(PGO_OPT -DLLVM_PROFDATA=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-profdata)
++    if(CLANG_BUILT_STANDALONE)
++      set(PGO_OPT -DLLVM_PROFDATA=${LLVM_TOOLS_BINARY_DIR}/llvm-profdata)
++    else()
++      add_dependencies(clang-bootstrap-deps llvm-profdata)
++      set(PGO_OPT -DLLVM_PROFDATA=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-profdata)
++    endif()
+     string(TOUPPER "${BOOTSTRAP_LLVM_BUILD_INSTRUMENTED}" BOOTSTRAP_LLVM_BUILD_INSTRUMENTED)
+     if (BOOTSTRAP_LLVM_BUILD_INSTRUMENTED STREQUAL "CSSPGO")
+-      add_dependencies(clang-bootstrap-deps llvm-profgen)
+-      list(APPEND PGO_OPT -DLLVM_PROFGEN=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-profgen)
++      if(CLANG_BUILT_STANDALONE)
++        list(APPEND PGO_OPT -DLLVM_PROFGEN=${LLVM_TOOLS_BINARY_DIR}/llvm-profgen)
++      else()
++        add_dependencies(clang-bootstrap-deps llvm-profgen)
++        list(APPEND PGO_OPT -DLLVM_PROFGEN=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-profgen)
++      endif()
+     endif()
+   endif()
+ 
+diff --git a/clang/runtime/CMakeLists.txt b/clang/runtime/CMakeLists.txt
+index ff2605b23..7b6ba3194 100644
+--- a/clang/runtime/CMakeLists.txt
++++ b/clang/runtime/CMakeLists.txt
+@@ -67,7 +67,11 @@ if(LLVM_BUILD_EXTERNAL_COMPILER_RT AND EXISTS ${COMPILER_RT_SRC_ROOT}/)
+   endif()
+ 
+   include(GetClangResourceDir)
+-  get_clang_resource_dir(output_resource_dir PREFIX ${LLVM_BINARY_DIR})
++  if(CLANG_BUILT_STANDALONE)
++    get_clang_resource_dir(output_resource_dir PREFIX ${CMAKE_BINARY_DIR})
++  else()
++    get_clang_resource_dir(output_resource_dir PREFIX ${LLVM_BINARY_DIR})
++  endif()
+   get_clang_resource_dir(install_resource_dir)
+   ExternalProject_Add(compiler-rt
+     DEPENDS llvm-config clang ${compiler_rt_configure_deps}

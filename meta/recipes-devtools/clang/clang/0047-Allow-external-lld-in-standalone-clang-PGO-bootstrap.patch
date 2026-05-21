@@ -1,0 +1,41 @@
+From 5511c1a1c4731cf7a7f87a63c60d31c7b932ad52 Mon Sep 17 00:00:00 2001
+From: "mark.yang" <mark.yang@lge.com>
+Date: Tue, 19 May 2026 17:06:11 +0900
+Subject: Allow external lld in standalone clang PGO bootstrap
+
+When clang is built standalone against a sysroot-installed LLVM,
+lld is not a build target and LLVM_ENABLE_PROJECTS doesn't carry it.
+ld.lld comes from OE's lld-native recipe. BOOTSTRAP_LLVM_ENABLE_LLD=ON
+fails the LLVM_ENABLE_PROJECTS check with FATAL_ERROR, and
+add_dependencies(clang-bootstrap-deps lld) refers to a target that
+doesn't exist.
+
+Accept ld.lld under LLVM_TOOLS_BINARY_DIR in the guard, and skip the
+DEPENDS when lld isn't a target.
+
+Upstream-Status: Inappropriate [OE specific]
+Signed-off-by: mark.yang <mark.yang@lge.com>
+---
+ clang/CMakeLists.txt | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/clang/CMakeLists.txt b/clang/CMakeLists.txt
+index bd5527f42..64c2f2616 100644
+--- a/clang/CMakeLists.txt
++++ b/clang/CMakeLists.txt
+@@ -620,10 +620,13 @@ if (CLANG_ENABLE_BOOTSTRAP)
+   if(BOOTSTRAP_LLVM_ENABLE_LLD)
+     # adding lld to clang-bootstrap-deps without having it enabled in
+     # LLVM_ENABLE_PROJECTS just generates a cryptic error message.
+-    if (NOT "lld" IN_LIST LLVM_ENABLE_PROJECTS)
++    if (NOT "lld" IN_LIST LLVM_ENABLE_PROJECTS
++        AND NOT EXISTS "${LLVM_TOOLS_BINARY_DIR}/ld.lld")
+       message(FATAL_ERROR "LLD is enabled in the bootstrap build, but lld is not in LLVM_ENABLE_PROJECTS")
+     endif()
+-    add_dependencies(clang-bootstrap-deps lld)
++    if(TARGET lld)
++      add_dependencies(clang-bootstrap-deps lld)
++    endif()
+   endif()
+ 
+   if (WIN32)
