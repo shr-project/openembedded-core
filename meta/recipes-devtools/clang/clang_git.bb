@@ -32,6 +32,8 @@ PACKAGECONFIG ??= "build-id clangd libclang-python \
                    ${@bb.utils.contains('TC_CXX_RUNTIME', 'llvm', 'compiler-rt libcplusplus libomp unwindlib', '', d)} \
                    "
 PACKAGECONFIG:remove:class-native = "lto thin-lto"
+PACKAGECONFIG:remove:class-target = "thin-lto-pgo"
+PACKAGECONFIG:remove:class-nativesdk = "thin-lto-pgo"
 
 PACKAGECONFIG[build-id] = "-DENABLE_LINKER_BUILD_ID=ON,-DENABLE_LINKER_BUILD_ID=OFF,,"
 PACKAGECONFIG[clangd] = "-DCLANG_ENABLE_CLANGD=ON,-DCLANG_ENABLE_CLANGD=OFF,,"
@@ -47,9 +49,12 @@ PACKAGECONFIG[lto] = "-DLLVM_ENABLE_LTO=Full -DLLVM_BINUTILS_INCDIR=${STAGING_IN
 PACKAGECONFIG[thin-lto] = "-DLLVM_ENABLE_LTO=Thin -DLLVM_BINUTILS_INCDIR=${STAGING_INCDIR},,binutils,"
 PACKAGECONFIG[unwindlib] = "-DCLANG_DEFAULT_UNWINDLIB=libunwind,-DCLANG_DEFAULT_UNWINDLIB=libgcc,,"
 PACKAGECONFIG[libclang-python] = "-DCLANG_PYTHON_BINDINGS_VERSIONS=${PYTHON_BASEVERSION},,"
+PACKAGECONFIG[thin-lto-pgo] = "-DCLANG_LINK_CLANG_DYLIB=OFF -DBOOTSTRAP_LLVM_ENABLE_LLD=ON -DBOOTSTRAP_BOOTSTRAP_LLVM_ENABLE_LTO=Thin \
+                               -DLLVM_EXTERNAL_COMPILER_RT_SOURCE_DIR=${S}/compiler-rt -DLLVM_EXTERNAL_LIT=${S}/llvm/utils/lit/lit.py \
+                               -DCLANG_BOOTSTRAP_PASSTHROUGH='${PASSTHROUGH}' -DBOOTSTRAP_CLANG_BOOTSTRAP_PASSTHROUGH='${PASSTHROUGH}' \
+                               -C ${S}/clang/cmake/caches/PGO.cmake,,lld-native"
 
 OECMAKE_SOURCEPATH = "${S}/clang"
-
 
 # linux hosts (.so) on Windows .pyd
 SOLIBSDEV:mingw32 = ".pyd"
@@ -82,6 +87,22 @@ DEPENDS:append:class-target = " ${@bb.utils.contains('TC_CXX_RUNTIME', 'llvm', '
 
 RDEPENDS:${PN}:append:class-target = "${@bb.utils.contains('DISTRO_FEATURES', 'ld-is-lld', ' lld', '', d)}"
 RRECOMMENDS:${PN}:append:class-target = "binutils ${@bb.utils.contains('TC_CXX_RUNTIME', 'llvm', ' libcxx-dev', '', d)}"
+
+PASSTHROUGH = "LLVM_CMAKE_DIR;\
+LLVM_INCLUDE_TESTS;CLANG_INCLUDE_TESTS;\
+LLVM_EXTERNAL_LIT;\
+LLVM_ENABLE_ASSERTIONS;LLVM_ENABLE_PIC;CLANG_DEFAULT_PIE_ON_LINUX;\
+FFI_INCLUDE_DIR;\
+LLVM_NATIVE_TOOL_DIR;LLVM_TABLEGEN_EXE;CLANG_TABLEGEN_EXE;\
+LLVM_LIBDIR_SUFFIX;LLVM_VERSION_SUFFIX;\
+ENABLE_LINKER_BUILD_ID;CLANG_ENABLE_CLANGD;CLANGD_BUILD_DEXP;\
+CLANG_PYTHON_BINDINGS_VERSIONS;\
+CLANG_DEFAULT_RTLIB;CLANG_DEFAULT_CXX_STDLIB;CLANG_DEFAULT_UNWINDLIB;\
+CLANG_DEFAULT_OPENMP_RUNTIME;CLANG_DEFAULT_LINKER;\
+LLVM_ENABLE_LTO;LLVM_ENABLE_LLD;"
+
+OECMAKE_TARGET_COMPILE:class-native = "${@bb.utils.contains('PACKAGECONFIG', 'thin-lto-pgo', 'stage2', 'all', d)}"
+OECMAKE_TARGET_INSTALL:class-native = "${@bb.utils.contains('PACKAGECONFIG', 'thin-lto-pgo', 'stage2-install', 'install', d)}"
 
 do_configure:prepend() {
   # Link clang-tools-extra into the clang tree as clang will look for it here

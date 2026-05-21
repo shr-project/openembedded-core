@@ -60,6 +60,12 @@ SRC_URI = "\
     file://0039-Rename-UNUSED-and-UNKNOWN-elements-of-OffloadArch-enum.patch \
     file://0040-libcxxabi-declare-__gnu_unwind_frame-in-cxa_personal.patch \
     file://0041-Consolidate-and-fix-sysroot-based-compiler-rt-search.patch \
+    file://0042-perf-training-Propagate-OE-sysroot-flags-to-sub-buil.patch \
+    file://0043-PGO.cmake-Add-stage2-install-to-bootstrap-targets.patch \
+    file://0044-Move-perf-training-out-of-CLANG_INCLUDE_TESTS.patch \
+    file://0045-Fix-path-assumptions-for-standalone-PGO-bootstrap.patch \
+    file://0046-Skip-llvm-config-DEPENDS-in-standalone-clang-PGO-boo.patch \
+    file://0047-Allow-external-lld-in-standalone-clang-PGO-bootstrap.patch \
 "
 # Fallback to no-PIE if not set
 GCCPIE ??= ""
