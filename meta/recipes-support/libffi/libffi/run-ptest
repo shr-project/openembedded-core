@@ -1,0 +1,31 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+
+cd "$(dirname "$0")/tests" || exit 1
+
+for t in *; do
+    [ -x "$t" ] || continue
+
+    suite="${t%%__*}"
+    name="${t#*__}"
+
+    case "$suite" in
+        libffi.bhaible)
+            ./"$t" > "$t.out" 2>&1
+            if ! LC_ALL=C uniq -u < "$t.out" | grep -q .; then
+                echo "PASS: $suite/$name"
+            else
+                echo "FAIL: $suite/$name"
+                cat "$t.out"
+            fi
+            rm -f "$t.out"
+            ;;
+        *)
+            if ./"$t" 2>&1; then
+                echo "PASS: $suite/$name"
+            else
+                echo "FAIL: $suite/$name"
+            fi
+            ;;
+    esac
+done
