@@ -246,7 +246,7 @@ def staging_populate_sysroot_dir(targetsysroot, nativesysroot, native, d):
 
     staging_processfixme(fixme, targetdir, targetsysroot, nativesysroot, d)
     for p in sorted(postinsts):
-        bb.note("Running postinst {}, output:\n{}".format(p, subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)))
+        bb.note("Running postinst {}, output:\n{}".format(p, subprocess.check_output([p], stderr=subprocess.STDOUT)))
 
 staging_populate_sysroot_dir[vardepsexclude] += "PACKAGE_EXTRA_ARCHS"
 
@@ -632,7 +632,7 @@ python extend_recipe_sysroot() {
         staging_processfixme(fixme[f], f, recipesysroot, recipesysrootnative, d)
 
     for p in sorted(postinsts):
-        bb.note("Running postinst {}, output:\n{}".format(p, subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)))
+        bb.note("Running postinst {}, output:\n{}".format(p, subprocess.check_output([p], stderr=subprocess.STDOUT)))
 
     for dep in manifests:
         c = setscenedeps[dep][0]
