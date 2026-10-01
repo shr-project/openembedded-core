@@ -13,9 +13,11 @@ inherit siteinfo
 #
 oe_multilib_header() {
 
+	# Only multilib puts two variants of a header into one sysroot, so
+	# leave non-multilib musl headers as they are.
 	case ${HOST_OS} in
 	*-musl*)
-		return
+		[ -n "${MULTILIB_VARIANTS}" ] || return 0
 		;;
 	*)
 	esac
