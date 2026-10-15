@@ -34,7 +34,7 @@ HF = ""
 HF:class-target = "${@ bb.utils.contains('TUNE_CCARGS_MFLOAT', 'hard', 'hf', '', d)}"
 HF[vardepvalue] = "${HF}"
 
-EXTRA_OECMAKE += "-DCMAKE_BUILD_TYPE=MinSizeRel \
+EXTRA_OECMAKE += "-DCMAKE_BUILD_TYPE=Release \
                   -DLLVM_ENABLE_BINDINGS=OFF \
                   -DLLVM_INSTALL_UTILS=ON \
                   -DLLVM_ENABLE_FFI=ON \
